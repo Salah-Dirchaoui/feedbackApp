@@ -1,90 +1,73 @@
 import { createContext, useState, useEffect } from "react";
-const FeedbackContext = createContext()
 
+const FeedbackContext = createContext()
+const STORAGE_KEY = 'feedback-app-data'
+
+// Shown the first time someone opens the app (taken from your old db.json)
+const initialData = [
+  { id: '1', text: 'this a new item to test update from frontend to backend', rating: 8 },
+  { id: '2', text: 'this is the best test to see if update is changed from feedback', rating: 7 },
+  { id: '3', text: 'hello this is a test updated or change', rating: 10 },
+  { id: '4', text: 'hello again testing update', rating: 10 },
+]
+
+const loadFeedback = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    return saved ? JSON.parse(saved) : initialData
+  } catch {
+    return initialData
+  }
+}
 
 export const FeedbackProvider = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(true)
-  const [feedback, setFeedback] = useState([])
-  const [feedbackEdit, setFeedbackEdit] = useState({
-    item: {},
-    edit: false
-  })
+  const [feedback, setFeedback] = useState(loadFeedback)
+  const [feedbackEdit, setFeedbackEdit] = useState({ item: {}, edit: false })
+
+  // Save to the browser every time the list changes
   useEffect(() => {
-    let ignore = false
-
-    fetch('http://localhost:3000/feedback?_sort=id')
-      .then((response) => response.json())
-      .then((data) => {
-        if (!ignore) {
-          setFeedback(data)
-          setIsLoading(false)
-        }
-      })
-
-    return () => {
-      ignore = true
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(feedback))
+    } catch (error) {
+      console.error('Could not save feedback:', error)
     }
-  }, [])
+  }, [feedback])
 
-  const addFeedback = async (newFeedback) => {
-    const response = await fetch('http://localhost:3000/feedback', {
-      method: 'Post',
-      header: {
-        'Content-type': 'application/json'
-      },
-      body: JSON.stringify(newFeedback)
-    });
-    const data = await response.json()
-
-    setFeedback([data, ...feedback])
+  const addFeedback = (newFeedback) => {
+    const item = { ...newFeedback, id: crypto.randomUUID() }
+    setFeedback((prev) => [item, ...prev])
   }
-  const deleteFeedback = async (id) => {
+
+  const deleteFeedback = (id) => {
     if (window.confirm('Are you sure you want to delete ?')) {
-      setFeedback(feedback.filter((item) => item.id !== id))
-      await fetch(`http://localhost:3000/feedback/${id}`, { method: 'DELETE' })
-    } else {
-      return
+      setFeedback((prev) => prev.filter((item) => item.id !== id))
     }
   }
-  // update feedback item
-  const updateFeedback = async (id, updatedItem) => {
-    const response = await fetch(`http://localhost:3000/feedback/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-type': 'application/json'
-      },
-      body: JSON.stringify(updatedItem)
-    })
 
-    const data = await response.json()
-
-    setFeedback(feedback.map((item) => item.id === id ? { ...item, ...data } : item))
-
-
-    setFeedbackEdit({
-      item: {},
-      edit: false,
-    })
-
-  }
-  const editFeedback = (item) => {
-    setFeedbackEdit({
-      item,
-      edit: true
-    })
+  const updateFeedback = (id, updatedItem) => {
+    setFeedback((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, ...updatedItem } : item))
+    )
+    setFeedbackEdit({ item: {}, edit: false })
   }
 
-  return <FeedbackContext.Provider value={{
-    feedback,
-    feedbackEdit,
-    isLoading,
-    deleteFeedback,
-    addFeedback,
-    editFeedback,
-    updateFeedback
-  }}>
-    {children}
-  </FeedbackContext.Provider>
+  const editFeedback = (item) => setFeedbackEdit({ item, edit: true })
+
+  return (
+    <FeedbackContext.Provider
+      value={{
+        feedback,
+        feedbackEdit,
+        isLoading: false,
+        deleteFeedback,
+        addFeedback,
+        editFeedback,
+        updateFeedback,
+      }}
+    >
+      {children}
+    </FeedbackContext.Provider>
+  )
 }
 
 export default FeedbackContext
